@@ -1,0 +1,82 @@
+<!doctype html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827"><title>Wilma Draft Simulator</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#111827;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{background:#111827;color:white;padding:15px}h1{font-size:20px;margin:0}header p{font-size:12px;color:#cbd5e1;margin:4px 0 0}
+main{max-width:1100px;margin:auto;padding:10px}.card{background:white;border:1px solid #e5e7eb;border-radius:14px;padding:12px;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}label{font-size:12px;color:#6b7280}select,input{display:block;padding:9px;border:1px solid #d1d5db;border-radius:9px;background:white;margin-top:4px}button{padding:10px 12px;border:0;border-radius:9px;font-weight:700;background:#e5e7eb}button.primary{background:#2563eb;color:white}
+.grid{display:grid;grid-template-columns:1.3fr .8fr;gap:10px}@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.board{display:grid;grid-template-columns:repeat(10,minmax(90px,1fr));overflow:auto;border:1px solid #e5e7eb;border-radius:9px}
+.cell{min-height:58px;padding:5px;font-size:11px;border-right:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb}.head{background:#f9fafb;font-weight:800}.mine{background:#dbeafe}.muted{font-size:12px;color:#6b7280}.player{display:grid;grid-template-columns:30px 1fr 45px 35px;gap:5px;padding:8px 3px;border-bottom:1px solid #e5e7eb;cursor:pointer}.player:hover{background:#f9fafb}.name{font-weight:700}.rec{background:#eff6ff;border:1px solid #2563eb;border-radius:8px;margin:4px 0}.picked{opacity:.35;text-decoration:line-through;cursor:default}.log{max-height:260px;overflow:auto;font-size:12px}.statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.stat{background:#f9fafb;border-radius:8px;padding:8px}.stat b{display:block;font-size:18px}.pill{font-size:11px;background:#eef2ff;color:#3730a3;border-radius:99px;padding:3px 7px}
+</style></head><body>
+<header><h1>Wilma Draft Simulator</h1><p>10-team • Full PPR • Snake • historical-opponent AI</p></header>
+<main>
+<section class="card"><b>Draft setup</b><div class="row">
+<label>Your slot<select id="slot"></select></label>
+<label>AI randomness<select id="risk"><option value=".10">Tight</option><option value=".18" selected>Balanced</option><option value=".28">Aggressive</option></select></label>
+<label>Rounds<select id="rounds"><option>15</option><option selected>17</option><option>18</option></select></label>
+<button class="primary" onclick="start()">Start draft</button><button onclick="reset()">Reset</button></div>
+<p class="muted">Pick any draft slot. The AI uses the historical round-by-round tendencies from the ESPN draft data supplied in this project, while still reacting to tiers and roster need.</p></section>
+<div class="grid"><div>
+<section class="card"><b>Draft board</b><p id="turn" class="muted">Choose a slot and start.</p><div id="board" class="board"></div></section>
+<section class="card"><b>Best available for Wilma</b><div id="rec"></div></section>
+<section class="card"><b>Tiered rankings</b><div class="row">
+<input id="q" placeholder="Search player" oninput="rank()"><select id="pos" onchange="rank()"><option>ALL</option><option>RB</option><option>WR</option><option>QB</option><option>TE</option><option>K</option><option>DST</option></select><select id="tier" onchange="rank()"><option>ALL</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div><div id="rank"></div></section>
+</div><div>
+<section class="card"><b>Wilma roster</b><div id="roster" class="muted">No picks yet.</div></section>
+<section class="card"><b>Roster profile</b><div id="profile" class="muted"></div></section>
+<section class="card"><b>Draft log</b><div id="log" class="log"></div></section>
+<section class="card"><b>Opponent models</b><div class="muted">Urethra Franklin: balanced • Let's Go Brandon Aubrey!: RB/value • Pass Hall the Hall Pass: WR-heavy • 1 of the Joe's: balanced • LaPorta Potties: TE/value • Hairy Potter: QB/value • Ruggs Racing, LLC: WR/TE • My Team Really Sucks: QB/WR • Bahia Bay X-Blades: RB/value.</div></section>
+</div></div></main>
+<script>
+const teams=["Urethra Franklin","Let's Go Brandon Aubrey!","Pass Hall the Hall Pass","1 of the Joe's","Wilma Dikfit","LaPorta Potties","Hairy Potter","Ruggs Racing, LLC","My Team Really Sucks","Bahia Bay X-Blades"];
+const styles=["bal","rb","wr","bal","user","te","qb","wr","qbwr","rb"];
+const hist={
+1:["Christian McCaffrey","Tyreek Hill","Breece Hall","Bijan Robinson","CeeDee Lamb","Ja'Marr Chase","Amon-Ra St. Brown","Justin Jefferson","Puka Nacua","Jonathan Taylor"],
+2:["A.J. Brown","Garrett Wilson","Saquon Barkley","Chris Olave","Isiah Pacheco","Jahmyr Gibbs","Kyren Williams","Travis Etienne Jr.","Derrick Henry","Marvin Harrison Jr."],
+3:["Rachaad White","Davante Adams","Mike Evans","Michael Pittman Jr.","Drake London","Josh Jacobs","Alvin Kamara","DK Metcalf","Nico Collins","Deebo Samuel Sr."],
+4:["Jalen Hurts","James Cook","DJ Moore","Lamar Jackson","Sam LaPorta","Joe Mixon","Malik Nabers","Travis Kelce","Josh Allen","Kenneth Walker III"],
+5:["Cooper Kupp","Mark Andrews","Brandon Aiyuk","De'Von Achane","Jaylen Waddle","Stefon Diggs","Jayden Reed","Rhamondre Stevenson","Patrick Mahomes","Calvin Ridley"],
+6:["Evan Engram","Zay Flowers","DeVonta Smith","Aaron Jones","Zamir White","Rashee Rice","Tee Higgins","C.J. Stroud","George Pickens","Kyler Murray"],
+7:["Tank Dell","Keenan Allen","Chris Godwin","Trey McBride","Anthony Richardson","Terry McLaurin","Amari Cooper","George Kittle","D'Andre Swift","James Conner"],
+8:["Christian Kirk","Dalton Kincaid","Joe Burrow","Jordan Love","Javonte Williams","Kyle Pitts","Dak Prescott","David Montgomery","Tony Pollard","Raheem Mostert"],
+9:["Courtland Sutton","Austin Ekeler","Christian Watson","Diontae Johnson","Xavier Worthy","Rome Odunze","David Njoku","Jaxon Smith-Njigba","Najee Harris","Brian Robinson Jr."],
+10:["Ladd McConkey","Jaylen Warren","Tyjae Spears","Nick Chubb","Jayden Daniels","Jordan Addison","Devin Singletary","Keon Coleman","Jake Ferguson","Jerome Ford"],
+11:["Brock Bowers","DeAndre Hopkins","T.J. Hockenson","Brock Purdy","Chase Brown","J.K. Dobbins","Cole Kmet","Deshaun Watson","Brian Thomas Jr.","Jonathon Brooks"],
+12:["Gus Edwards","Jakobi Meyers","Browns D/ST","Ezekiel Elliott","Dallas Goedert","Zack Moss","Hollywood Brown","Mike Williams","Ravens D/ST","Curtis Samuel"],
+13:["Jordan Mason","Brandon Aubrey","Jets D/ST","Tyler Lockett","Aaron Rodgers","Justin Tucker","Chuba Hubbard","Jerry Jeudy","Justin Herbert","Rico Dowdle"],
+14:["Jake Bates","Kirk Cousins","Antonio Gibson","Jake Elliott","Jameson Williams","Tyler Allgeier","Zach Charbonnet","Darnell Mooney","Caleb Williams","Bucky Irving"],
+15:["Tua Tagovailoa","Blake Corum","Khalil Shakir","Ty Chandler","Pat Freiermuth","49ers D/ST","Cowboys D/ST","Gabe Davis","Jaleel McLaughlin","Steelers D/ST"],
+16:["Jared Goff","Dolphins D/ST","Harrison Butker","Romeo Doubs","MarShawn Lloyd","Chiefs D/ST","Saints D/ST","Greg Zuerlein","Dontayvion Wicks","Evan McPherson"],
+17:["Lions D/ST","Adam Thielen","Trevor Lawrence","Ka'imi Fairbairn","Cameron Dicker","Matthew Stafford","Brandin Cooks","Dalton Schultz","Jake Moody","Will Levis"]};
+const raw=[
+["Christian McCaffrey","RB",1],["Breece Hall","RB",1],["Bijan Robinson","RB",1],["Saquon Barkley","RB",1],["Jahmyr Gibbs","RB",1],["Jonathan Taylor","RB",1],["De'Von Achane","RB",1],["Kyren Williams","RB",1],["Derrick Henry","RB",1],["Josh Jacobs","RB",2],["Alvin Kamara","RB",2],["James Cook","RB",2],["Kenneth Walker III","RB",2],["Travis Etienne Jr.","RB",2],["Aaron Jones","RB",3],["D'Andre Swift","RB",3],["James Conner","RB",3],["David Montgomery","RB",3],["Rhamondre Stevenson","RB",3],["Najee Harris","RB",3],["Brian Robinson Jr.","RB",3],["Jaylen Warren","RB",3],["Nick Chubb","RB",3],["Chuba Hubbard","RB",4],["Zach Charbonnet","RB",4],["J.K. Dobbins","RB",4],["Chase Brown","RB",4],["Bucky Irving","RB",4],["Jordan Mason","RB",4],["Rico Dowdle","RB",4],["Tyjae Spears","RB",4],
+["Justin Jefferson","WR",1],["Ja'Marr Chase","WR",1],["CeeDee Lamb","WR",1],["Amon-Ra St. Brown","WR",1],["Tyreek Hill","WR",1],["Puka Nacua","WR",1],["A.J. Brown","WR",1],["Garrett Wilson","WR",1],["Marvin Harrison Jr.","WR",1],["Drake London","WR",2],["Nico Collins","WR",2],["Davante Adams","WR",2],["Deebo Samuel Sr.","WR",2],["Brandon Aiyuk","WR",2],["DeVonta Smith","WR",2],["Jaylen Waddle","WR",2],["Zay Flowers","WR",2],["Chris Olave","WR",2],["Mike Evans","WR",2],["DK Metcalf","WR",2],["DJ Moore","WR",2],["George Pickens","WR",3],["Tee Higgins","WR",3],["Xavier Worthy","WR",3],["Rome Odunze","WR",3],["Jaxon Smith-Njigba","WR",3],["Jameson Williams","WR",3],["Ladd McConkey","WR",3],["Jordan Addison","WR",3],["Courtland Sutton","WR",3],["Christian Watson","WR",3],["Diontae Johnson","WR",3],["Brian Thomas Jr.","WR",3],["Jayden Reed","WR",3],["Terry McLaurin","WR",3],["Chris Godwin","WR",3],["Keenan Allen","WR",3],["Cooper Kupp","WR",3],
+["Josh Allen","QB",2],["Jalen Hurts","QB",2],["Lamar Jackson","QB",2],["Patrick Mahomes","QB",2],["C.J. Stroud","QB",2],["Jayden Daniels","QB",2],["Joe Burrow","QB",2],["Jordan Love","QB",3],["Dak Prescott","QB",3],["Kyler Murray","QB",3],["Brock Purdy","QB",3],["Justin Herbert","QB",3],["Caleb Williams","QB",4],["Aaron Rodgers","QB",4],["Kirk Cousins","QB",5],["Tua Tagovailoa","QB",5],["Trevor Lawrence","QB",5],["Jared Goff","QB",5],["Matthew Stafford","QB",6],["Will Levis","QB",6],
+["Brock Bowers","TE",2],["Sam LaPorta","TE",2],["Trey McBride","TE",2],["Travis Kelce","TE",2],["Mark Andrews","TE",3],["George Kittle","TE",3],["Dalton Kincaid","TE",3],["Kyle Pitts","TE",3],["Evan Engram","TE",3],["T.J. Hockenson","TE",4],["David Njoku","TE",4],["Jake Ferguson","TE",4],["Dallas Goedert","TE",5],["Pat Freiermuth","TE",5],["Cole Kmet","TE",5],["Dalton Schultz","TE",6],
+["49ers D/ST","DST",5],["Cowboys D/ST","DST",5],["Steelers D/ST","DST",5],["Browns D/ST","DST",5],["Ravens D/ST","DST",5],["Jets D/ST","DST",5],["Chiefs D/ST","DST",5],["Dolphins D/ST","DST",6],["Saints D/ST","DST",6],["Lions D/ST","DST",6],
+["Brandon Aubrey","K",6],["Justin Tucker","K",6],["Jake Elliott","K",6],["Jake Bates","K",6],["Harrison Butker","K",6],["Cameron Dicker","K",6],["Ka'imi Fairbairn","K",6],["Greg Zuerlein","K",6],["Evan McPherson","K",6],["Jake Moody","K",6]];
+const seen=new Set(), players=[];raw.forEach(x=>{if(!seen.has(x[0])){seen.add(x[0]);players.push({name:x[0],pos:x[1],tier:x[2],adp:players.length+1})}});
+let S={started:false,slot:5,rounds:17,pick:0,risk:.18,taken:new Set(),rosters:Array.from({length:10},()=>[]),log:[]};
+function owner(n){let r=Math.floor(n/10),i=n%10;return r%2?9-i:i} function cur(){return owner(S.pick)}
+function score(i,p,r){let s=(7-p.tier)*12, rp=S.rosters[i].filter(x=>x.pos==p.pos).length, st=styles[i], list=hist[r+1]||[], ix=list.indexOf(p.name);
+if(ix==i)s+=18;else if(ix>=0)s+=8;
+if(st=="rb"&&p.pos=="RB")s+=10;if(st=="wr"&&p.pos=="WR")s+=10;if(st=="qbwr"&&(p.pos=="QB"||p.pos=="WR"))s+=8;if(st=="te"&&p.pos=="TE")s+=10;if(st=="qb"&&(p.pos=="QB"||p.pos=="TE"))s+=7;
+if(st=="rb"&&p.pos=="RB")s+=5;if(p.pos=="RB"&&rp<2)s+=6;if(p.pos=="WR"&&rp<3)s+=5;if(p.pos=="QB"&&rp==0)s+=4;if(p.pos=="TE"&&rp==0)s+=4;
+if(["K","DST"].includes(p.pos)&&r<13)s-=20;if(["K","DST"].includes(p.pos)&&r>=13&&rp==0)s+=8;
+if(p.pos=="QB"&&rp)s-=18;if(p.pos=="TE"&&rp)s-=14;if(p.pos=="RB"&&rp>=4)s-=8;if(p.pos=="WR"&&rp>=6)s-=8;
+return s+(Math.random()-.5)*S.risk*100}
+function pickAI(i,r){let a=players.filter(p=>!S.taken.has(p.name)).map(p=>({p,s:score(i,p,r)})).sort((a,b)=>b.s-a.s);return a[Math.floor(Math.random()*Math.min(3,a.length))].p}
+function add(i,p){S.rosters[i].push(p);S.taken.add(p.name);S.log.unshift("R"+(Math.floor(S.pick/10)+1)+"."+((S.pick%10)+1)+" — <b>"+teams[i]+"</b> → "+p.name+" ("+p.pos+")")}
+function start(){S={started:true,slot:+slot.value,rounds:+rounds.value,pick:0,risk:+risk.value,taken:new Set(),rosters:Array.from({length:10},()=>[]),log:[]};advance()}
+function advance(){while(S.pick<S.rounds*10&&cur()!=S.slot-1){add(cur(),pickAI(cur(),Math.floor(S.pick/10)));S.pick++}render()}
+function userPick(n){if(!S.started||cur()!=S.slot-1||S.taken.has(n))return;add(S.slot-1,players.find(p=>p.name==n));S.pick++;advance()}
+function reset(){S={started:false,slot:+slot.value||5,rounds:17,pick:0,risk:.18,taken:new Set(),rosters:Array.from({length:10},()=>[]),log:[]};render()}
+function renderBoard(){let s="";for(let i=0;i<10;i++)s+='<div class="cell head">#'+(i+1)+'<br><small>'+teams[i]+'</small></div>';for(let r=0;r<S.rounds;r++)for(let i=0;i<10;i++){let n=r*10+(r%2?9-i:i),o=owner(n),txt=S.log.slice().reverse()[n]?.replace(/<[^>]*>/g,"").split("→ ")[1]||"—";s+='<div class="cell '+(o==S.slot-1?'mine':'')+'">'+txt+'<br><small>'+teams[o]+'</small></div>'}board.innerHTML=s}
+function roster(){let a=S.rosters[S.slot-1],c={RB:0,WR:0,QB:0,TE:0,K:0,DST:0};a.forEach(p=>c[p.pos]++);document.getElementById("roster").innerHTML=a.length?a.map((p,i)=>(i+1)+". <b>"+p.name+"</b> <span class=muted>"+p.pos+" • T"+p.tier+"</span>").join("<br>"):"No picks yet.";profile.innerHTML='<div class=statgrid>'+Object.keys(c).map(k=>'<div class=stat><b>'+c[k]+'</b>'+k+'</div>').join("")+'</div>'}
+function rank(){let q=document.getElementById("q").value.toLowerCase(),p=document.getElementById("pos").value,t=document.getElementById("tier").value,a=players.filter(x=>(!q||x.name.toLowerCase().includes(q))&&(p=="ALL"||x.pos==p)&&(t=="ALL"||x.tier==t));document.getElementById("rank").innerHTML=a.map(x=>{let z=S.taken.has(x.name);return '<div class="player '+(z?'picked':'')+'" onclick="'+(z?'':'userPick('+JSON.stringify(x.name)+')')+'"><b>'+x.adp+'</b><div><span class=name>'+x.name+'</span><br><span class=muted>'+x.pos+'</span></div><b>T'+x.tier+'</b><span>'+(z?'OUT':'+')+'</span></div>'}).join("")}
+function rec(){let r=Math.floor(S.pick/10),a=players.filter(p=>!S.taken.has(p.name)).map(p=>({p,s:score(S.slot-1,p,r)})).sort((a,b)=>b.s-a.s).slice(0,8);document.getElementById("rec").innerHTML=a.map((x,i)=>'<div class="player rec" onclick="userPick('+JSON.stringify(x.p.name)+')"><b>'+(i+1)+'</b><div><span class=name>'+x.p.name+'</span><br><span class=muted>'+x.p.pos+' • Tier '+x.p.tier+'</span></div><b>'+Math.round(x.s)+'</b><span>+</span></div>').join("")}
+function render(){renderBoard();roster();rank();rec();log.innerHTML=S.log.join("<br>")||"Draft log will appear here.";turn.textContent=!S.started?"Choose a slot and start.":S.pick>=S.rounds*10?"Draft complete":cur()==S.slot-1?"YOUR PICK — "+(S.pick+1)+" overall":"Waiting for the AI…"}
+for(let i=1;i<=10;i++)slot.innerHTML+='<option value="'+i+'" '+(i==5?'selected':'')+'>'+i+'</option>';render();
+</script></body></html>
